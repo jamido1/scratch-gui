@@ -106,7 +106,9 @@ class LibraryItem extends React.PureComponent {
     render () {
         const iconMd5 = this.curIconMd5();
         const iconURL = iconMd5 ?
-            `https://cdn.assets.scratch.mit.edu/internalapi/asset/${iconMd5}/get/` :
+            // KAT: load library thumbnails from our own mirrored, mascot-free copy (static/scratch-assets),
+            // not Scratch's CDN (which hotlink-blocks other origins).
+            `/static/scratch-assets/${iconMd5}` :
             this.props.iconRawURL;
         return (
             <LibraryItemComponent

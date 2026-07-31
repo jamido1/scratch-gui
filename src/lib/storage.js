@@ -59,7 +59,9 @@ class Storage extends ScratchStorage {
         this.assetHost = assetHost;
     }
     getAssetGetConfig (asset) {
-        return `${this.assetHost}/internalapi/asset/${asset.assetId}.${asset.dataFormat}/get/`;
+        // KAT: load costume/sound/backdrop data from our own mirrored copy (static/scratch-assets),
+        // not Scratch's CDN. Files are named by md5ext, matching what we downloaded.
+        return `/static/scratch-assets/${asset.assetId}.${asset.dataFormat}`;
     }
     getAssetCreateConfig (asset) {
         return {
