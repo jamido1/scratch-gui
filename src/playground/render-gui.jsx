@@ -10,7 +10,8 @@ import KatVmExposer from './kat-vm-exposer.jsx';
 import './bridge.js';
 
 const onClickLogo = () => {
-    window.location = 'https://scratch.mit.edu';
+    // KAT: point at our own site, not scratch.mit.edu (trademark de-branding).
+    window.location = 'https://kindleatechie.com';
 };
 
 const handleTelemetryModalCancel = () => {

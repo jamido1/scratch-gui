@@ -87,10 +87,6 @@ import editIcon from './icon--edit.svg';
 import debugIcon from '../debug-modal/icons/icon--debug.svg';
 
 import scratchLogo from './scratch-logo.svg';
-import ninetiesLogo from './nineties_logo.svg';
-import catLogo from './cat_logo.svg';
-import prehistoricLogo from './prehistoric-logo.svg';
-import oldtimeyLogo from './oldtimey-logo.svg';
 
 import sharedMessages from '../../lib/shared-messages';
 
@@ -259,18 +255,9 @@ class MenuBar extends React.Component {
                 document.documentElement.style.height = '';
             }
 
-            // Change logo for modes
-            if (mode === '1990') {
-                document.getElementById('logo_img').src = ninetiesLogo;
-            } else if (mode === '2020') {
-                document.getElementById('logo_img').src = catLogo;
-            } else if (mode === '1920') {
-                document.getElementById('logo_img').src = oldtimeyLogo;
-            } else if (mode === '220022BC') {
-                document.getElementById('logo_img').src = prehistoricLogo;
-            } else {
-                document.getElementById('logo_img').src = this.props.logo;
-            }
+            // KAT: always show our own logo. The themed Scratch logos (including the cat) are removed for
+            // trademark de-branding.
+            document.getElementById('logo_img').src = this.props.logo;
 
             this.props.onSetTimeTravelMode(mode);
         };

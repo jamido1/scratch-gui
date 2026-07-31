@@ -125,7 +125,7 @@ const buildConfig = baseConfig.clone()
         ...commonHtmlWebpackPluginOptions,
         chunks: ['gui'],
         template: 'src/playground/index.ejs',
-        title: 'Scratch 3.0 GUI'
+        title: 'KAT Blocks'
     }))
     .addPlugin(new HtmlWebpackPlugin({
         ...commonHtmlWebpackPluginOptions,
