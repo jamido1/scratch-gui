@@ -9,6 +9,18 @@ import defaultProject from './default-project';
 class Storage extends ScratchStorage {
     constructor () {
         super();
+        // KAT: force main-thread fetching for assets. This scratch-storage version loads assets through a
+        // Web Worker whose chunk our webpack build does not emit (it 404s on our host), and a dead worker
+        // HANGS instead of rejecting, so ProxyTool never falls back. Drop the worker tool and keep only the
+        // last tool (the main-thread FetchTool), which works. Guarded in case internals change upstream.
+        try {
+            const assetTool = this.webHelper && this.webHelper.assetTool;
+            if (assetTool && Array.isArray(assetTool.tools) && assetTool.tools.length > 1) {
+                assetTool.tools = assetTool.tools.slice(-1);
+            }
+        } catch (e) {
+            // If the internal shape changes, leave the default tools in place.
+        }
         this.cacheDefaultProject();
     }
     addOfficialScratchWebStores () {
