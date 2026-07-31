@@ -1,0 +1,11 @@
+{
+  // Serve the built scratch-gui as a STATIC SITE on Cloudflare Workers (no Worker code).
+  // `wrangler deploy` uploads the `build/` folder webpack produces and serves it.
+  // If your Cloudflare project is named something other than "scratch-gui", change `name` to match it.
+  "name": "scratch-gui",
+  "compatibility_date": "2024-11-01",
+  "assets": {
+    "directory": "./build",
+    "not_found_handling": "single-page-application"
+  }
+}
