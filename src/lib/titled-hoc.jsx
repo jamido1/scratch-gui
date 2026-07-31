@@ -13,7 +13,7 @@ const messages = defineMessages({
     defaultProjectTitle: {
         id: 'gui.gui.defaultProjectTitle',
         description: 'Default title for project',
-        defaultMessage: 'Scratch Project'
+        defaultMessage: 'KAT Project'
     }
 });
 
@@ -46,7 +46,8 @@ const TitledHOC = function (WrappedComponent) {
         handleReceivedProjectTitle (requestedTitle) {
             let newTitle = requestedTitle;
             if (newTitle === null || typeof newTitle === 'undefined') {
-                newTitle = this.props.intl.formatMessage(messages.defaultProjectTitle);
+                // KAT: hardcode so a translation bundle cannot reintroduce "Scratch Project".
+                newTitle = 'KAT Project';
             }
             this.props.onChangedProjectTitle(newTitle);
             return newTitle;
