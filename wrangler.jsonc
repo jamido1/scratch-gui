@@ -5,7 +5,8 @@
   "name": "scratch-gui",
   "compatibility_date": "2024-11-01",
   "assets": {
-    "directory": "./build",
-    "not_found_handling": "single-page-application"
+    // No SPA fallback: scratch-gui uses hash routing, so every real path is a file. Returning index.html
+    // for misses would corrupt worker/chunk loads (they'd get HTML), so a miss must be a clean 404.
+    "directory": "./build"
   }
 }
