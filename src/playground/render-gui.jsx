@@ -6,6 +6,8 @@ import AppStateHOC from '../lib/app-state-hoc.jsx';
 import GUI from '../containers/gui.jsx';
 import HashParserHOC from '../lib/hash-parser-hoc.jsx';
 import log from '../lib/log.js';
+import KatVmExposer from './kat-vm-exposer.jsx';
+import './bridge.js';
 
 const onClickLogo = () => {
     window.location = 'https://scratch.mit.edu';
@@ -34,10 +36,18 @@ export default appTarget => {
     // note that redux's 'compose' function is just being used as a general utility to make
     // the hierarchy of HOC constructor calls clearer here; it has nothing to do with redux's
     // ability to compose reducers.
+    // KAT: render the GUI together with KatVmExposer so the exposer sits inside AppStateHOC's store
+    // Provider and can read state.scratchGui.vm (see kat-vm-exposer.jsx + bridge.js).
+    const GuiWithBridge = props => (
+        <React.Fragment>
+            <GUI {...props} />
+            <KatVmExposer />
+        </React.Fragment>
+    );
     const WrappedGui = compose(
         AppStateHOC,
         HashParserHOC
-    )(GUI);
+    )(GuiWithBridge);
 
     // TODO a hack for testing the backpack, allow backpack host to be set by url param
     const backpackHostMatches = window.location.href.match(/[?&]backpack_host=([^&]*)&?/);
@@ -56,10 +66,8 @@ export default appTarget => {
         }
     }
 
-    if (process.env.NODE_ENV === 'production' && typeof window === 'object') {
-        // Warn before navigating away
-        window.onbeforeunload = () => true;
-    }
+    // KAT: the "leave site?" prompt is disabled. This editor runs inside the KAT iframe, where a
+    // browser navigation warning is confusing; unsaved-work warnings are handled by the KAT page.
 
     ReactDOM.render(
         // important: this is checking whether `simulateScratchDesktop` is truthy, not just defined!
