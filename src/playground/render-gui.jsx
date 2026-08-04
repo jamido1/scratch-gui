@@ -7,7 +7,6 @@ import GUI from '../containers/gui.jsx';
 import HashParserHOC from '../lib/hash-parser-hoc.jsx';
 import log from '../lib/log.js';
 import KatVmExposer from './kat-vm-exposer.jsx';
-import KatRecorder from './kat-recorder.jsx';
 import './bridge.js';
 
 const onClickLogo = () => {
@@ -44,7 +43,6 @@ export default appTarget => {
         <React.Fragment>
             <GUI {...props} />
             <KatVmExposer />
-            <KatRecorder />
         </React.Fragment>
     );
     const WrappedGui = compose(

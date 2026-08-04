@@ -1,14 +1,16 @@
 import PropTypes from 'prop-types';
 import React from 'react';
+import ReactDOM from 'react-dom';
 import {connect} from 'react-redux';
 
 /*
  * KAT stage recorder (self-hosted scratch-gui addition, not upstream).
  *
  * Records the STAGE canvas to a .webm video, mixing in the project's own sounds and (optionally) the
- * pupil's microphone narration, then offers a download. Self-contained: it reads the VM from the store
- * (like KatVmExposer) and renders its own floating control, so it touches NO vendored scratch-gui
- * component and survives upstream merges.
+ * pupil's microphone narration, then offers a download. The TRIGGER is a compact button rendered inline in
+ * the stage controls row (next to Stop), see controls.jsx; the setup panel and the preview modal are
+ * portaled to document.body so no ancestor clips them. It reads the VM from the store (like KatVmExposer),
+ * so it touches no vendored scratch-gui logic and survives upstream merges.
  *
  * Pipeline: stage canvas.captureStream() for video; a MediaStreamDestination fed by the audio engine's
  * inputNode (all project sounds) plus an optional mic source; combined into one MediaStream -> MediaRecorder.
@@ -21,6 +23,7 @@ const PINE = '#2f6f4e';
 const REC_RED = '#d92d20';
 const INK = '#241f1a';
 const LINE = '#e7ded2';
+const OVERLAY_Z = 2147483000;
 
 function pickMime () {
     if (typeof MediaRecorder === 'undefined') return null;
@@ -201,32 +204,36 @@ class KatRecorder extends React.Component {
     render () {
         if (typeof MediaRecorder === 'undefined') return null; // unsupported browser: hide entirely
         const {phase, useMic, elapsed, videoUrl, error} = this.state;
-        const anchor = {
-            position: 'fixed', right: '16px', bottom: '88px', zIndex: 9998,
-            fontFamily: 'system-ui, sans-serif'
-        };
+
+        const iconBtn = extra => Object.assign({
+            width: '34px', height: '34px', borderRadius: '50%', border: `1px solid ${LINE}`,
+            background: '#fff', cursor: 'pointer', display: 'inline-flex', alignItems: 'center',
+            justifyContent: 'center', padding: 0, marginLeft: '8px', verticalAlign: 'middle'
+        }, extra || {});
         const card = {
             background: '#fff', color: INK, border: `1px solid ${LINE}`, borderRadius: '14px',
-            boxShadow: '0 10px 30px rgba(36,31,26,.22)', padding: '14px', width: '260px'
+            boxShadow: '0 12px 34px rgba(36,31,26,.24)', padding: '14px', fontFamily: 'system-ui, sans-serif'
         };
 
-        if (phase === 'recording') {
-            return (
-                <div style={anchor}>
-                    <div style={Object.assign({}, card, {display: 'flex', alignItems: 'center', gap: '10px', width: 'auto'})}>
-                        <span style={{width: '12px', height: '12px', borderRadius: '50%', background: REC_RED, animation: 'katrecpulse 1s infinite'}} />
-                        <span style={{font: '600 14px system-ui', fontVariantNumeric: 'tabular-nums'}}>{fmt(elapsed)}</span>
-                        <button type="button" style={btn(REC_RED)} onClick={this.stop}>{'Stop'}</button>
-                        <style>{'@keyframes katrecpulse{0%,100%{opacity:1}50%{opacity:.35}}'}</style>
-                    </div>
-                </div>
-            );
-        }
+        // The inline trigger that sits in the stage controls row, next to Stop.
+        const inline = phase === 'recording' ? (
+            <span style={{display: 'inline-flex', alignItems: 'center', gap: '6px'}}>
+                <button type="button" title="Stop recording" onClick={this.stop} style={iconBtn({borderColor: REC_RED})}>
+                    <span style={{width: '13px', height: '13px', background: REC_RED, borderRadius: '3px'}} />
+                </button>
+                <span style={{font: '600 12px system-ui', color: REC_RED, fontVariantNumeric: 'tabular-nums'}}>{fmt(elapsed)}</span>
+            </span>
+        ) : (
+            <button type="button" title="Record video" onClick={this.openSetup} style={iconBtn()}>
+                <span style={{width: '13px', height: '13px', background: REC_RED, borderRadius: '50%'}} />
+            </button>
+        );
 
-        if (phase === 'setup') {
-            return (
-                <div style={anchor}>
-                    <div style={card}>
+        // Setup / preview / error float above everything; portaled to body so no ancestor clips them.
+        const overlays = (
+            <React.Fragment>
+                {phase === 'setup' ? (
+                    <div style={Object.assign({position: 'fixed', top: '56px', left: '50%', transform: 'translateX(-50%)', zIndex: OVERLAY_Z, width: '270px'}, card)}>
                         <div style={{fontWeight: 700, fontSize: '14px', marginBottom: '8px'}}>{'Record your stage'}</div>
                         <label style={{display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer'}}>
                             <input type="checkbox" checked={useMic} onChange={this.toggleMic} />
@@ -240,47 +247,33 @@ class KatRecorder extends React.Component {
                             <button type="button" style={btn('#efe9e0', {color: INK})} onClick={this.cancel}>{'Cancel'}</button>
                         </div>
                     </div>
-                </div>
-            );
-        }
-
-        if (phase === 'done') {
-            return (
-                <div style={{position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'system-ui, sans-serif'}}>
-                    <div style={Object.assign({}, card, {width: 'min(520px, 92vw)'})}>
-                        <div style={{fontWeight: 700, fontSize: '15px', marginBottom: '10px'}}>{'Your recording'}</div>
-                        <video
-                            src={videoUrl}
-                            controls
-                            style={{width: '100%', borderRadius: '10px', background: '#000', maxHeight: '60vh'}}
-                        />
-                        <div style={{display: 'flex', gap: '8px', marginTop: '12px'}}>
-                            <button type="button" style={btn(PINE)} onClick={this.download}>{'Download video'}</button>
-                            <button type="button" style={btn(CLAY)} onClick={this.reset}>{'Record again'}</button>
-                            <button type="button" style={btn('#efe9e0', {color: INK, marginLeft: 'auto'})} onClick={this.reset}>{'Close'}</button>
+                ) : null}
+                {phase === 'done' ? (
+                    <div style={{position: 'fixed', inset: 0, zIndex: OVERLAY_Z, background: 'rgba(0,0,0,.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'system-ui, sans-serif'}}>
+                        <div style={Object.assign({width: 'min(520px, 92vw)'}, card)}>
+                            <div style={{fontWeight: 700, fontSize: '15px', marginBottom: '10px'}}>{'Your recording'}</div>
+                            <video src={videoUrl} controls style={{width: '100%', borderRadius: '10px', background: '#000', maxHeight: '60vh'}} />
+                            <div style={{display: 'flex', gap: '8px', marginTop: '12px'}}>
+                                <button type="button" style={btn(PINE)} onClick={this.download}>{'Download video'}</button>
+                                <button type="button" style={btn(CLAY)} onClick={this.reset}>{'Record again'}</button>
+                                <button type="button" style={btn('#efe9e0', {color: INK, marginLeft: 'auto'})} onClick={this.reset}>{'Close'}</button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            );
-        }
-
-        // idle
-        return (
-            <div style={anchor}>
+                ) : null}
                 {error ? (
-                    <div style={{marginBottom: '8px', background: '#fee4e2', color: '#912018', border: '1px solid #fda29b', borderRadius: '10px', padding: '6px 10px', font: '600 12px system-ui', width: '220px'}}>
+                    <div style={{position: 'fixed', top: '56px', left: '50%', transform: 'translateX(-50%)', zIndex: OVERLAY_Z, background: '#fee4e2', color: '#912018', border: '1px solid #fda29b', borderRadius: '10px', padding: '8px 12px', font: '600 12px system-ui'}}>
                         {error}
                     </div>
                 ) : null}
-                <button
-                    type="button"
-                    onClick={this.openSetup}
-                    style={btn('#fff', {color: INK, border: `1px solid ${LINE}`, boxShadow: '0 6px 18px rgba(36,31,26,.16)', display: 'inline-flex', alignItems: 'center', gap: '8px'})}
-                >
-                    <span style={{width: '10px', height: '10px', borderRadius: '50%', background: REC_RED}} />
-                    {'Record video'}
-                </button>
-            </div>
+            </React.Fragment>
+        );
+
+        return (
+            <React.Fragment>
+                {inline}
+                {ReactDOM.createPortal(overlays, document.body)}
+            </React.Fragment>
         );
     }
 }
