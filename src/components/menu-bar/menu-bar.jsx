@@ -175,6 +175,8 @@ class MenuBar extends React.Component {
         super(props);
         bindAll(this, [
             'handleClickNew',
+            'handleKatSave',
+            'handleKatOpen',
             'handleClickRemix',
             'handleClickSave',
             'handleClickSaveAsCopy',
@@ -206,6 +208,17 @@ class MenuBar extends React.Component {
         if (readyToReplaceProject) {
             this.props.onClickNew(this.props.canSave && this.props.canCreateNew);
         }
+        this.props.onRequestCloseFile();
+    }
+    handleKatSave () {
+        // KAT: save to the pupil's KAT storage via the bridge (window.__katBridge), from the familiar
+        // File-menu place. The bridge asks the KAT page for a presigned URL (REQUEST_SAVE); see bridge.js.
+        if (window.__katBridge) window.__katBridge.save();
+        this.props.onRequestCloseFile();
+    }
+    handleKatOpen () {
+        // KAT: reload the pupil's saved project from KAT storage (revert to last save, behind a confirm).
+        if (window.__katBridge) window.__katBridge.open();
         this.props.onRequestCloseFile();
     }
     handleClickRemix () {
@@ -486,6 +499,17 @@ class MenuBar extends React.Component {
                                             )}
                                         </MenuSection>
                                     )}
+                                    {/* KAT: primary Save / Open go to the pupil's KAT storage via the bridge,
+                                        keeping the familiar File-menu place learners already know. */}
+                                    <MenuSection>
+                                        <MenuItem onClick={this.handleKatSave}>
+                                            {'Save'}
+                                        </MenuItem>
+                                        <MenuItem onClick={this.handleKatOpen}>
+                                            {'Open my project'}
+                                        </MenuItem>
+                                    </MenuSection>
+                                    {/* KAT: the real offline file download/upload, kept as a secondary export/import. */}
                                     <MenuSection>
                                         <MenuItem
                                             onClick={this.props.onStartSelectingFileUpload}
@@ -497,11 +521,7 @@ class MenuBar extends React.Component {
                                                 className={className}
                                                 onClick={this.getSaveToComputerHandler(downloadProjectCallback)}
                                             >
-                                                <FormattedMessage
-                                                    defaultMessage="Save to your computer"
-                                                    description="Menu bar item for downloading a project to your computer" // eslint-disable-line max-len
-                                                    id="gui.menuBar.downloadToComputer"
-                                                />
+                                                {'Download a copy'}
                                             </MenuItem>
                                         )}</SB3Downloader>
                                     </MenuSection>
