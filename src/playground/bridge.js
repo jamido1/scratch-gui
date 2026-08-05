@@ -5,7 +5,9 @@
  * stay identical to SCRATCH_MSG there. It lets the KAT page load a project into the editor and ask it to
  * save, and reports readiness / unsaved-changes / save results back up. It also exposes
  * `window.__katBridge.save() / .open()` so the editor's own File menu (menu-bar.jsx) drives save/open:
- * those REQUEST a presigned URL from the KAT page, which replies with SAVE / LOAD.
+ * those REQUEST a presigned URL from the KAT page, which replies with SAVE / LOAD. And it exposes
+ * `window.__katBridge.saveVideo(blob, durationMs)` so the stage recorder (kat-recorder.jsx) can upload a
+ * .webm recording to R2 the same way (REQUEST_VIDEO_UPLOAD -> VIDEO_UPLOAD_URL -> PUT -> VIDEO_SAVED).
  *
  * WIRING: in scratch-gui the VM is NOT a global, it lives in the Redux store (`state.scratchGui.vm`).
  * Expose it with the tiny `KatVmExposer` connected component from the README, which sets `window.__katVM`,
@@ -24,8 +26,13 @@
     SAVE_FAILED: "kat:scratch:save-failed",
     REQUEST_SAVE: "kat:scratch:request-save",
     REQUEST_LOAD: "kat:scratch:request-load",
+    REQUEST_VIDEO_UPLOAD: "kat:scratch:request-video-upload",
+    VIDEO_SAVED: "kat:scratch:video-saved",
+    VIDEO_SAVE_FAILED: "kat:scratch:video-save-failed",
     LOAD: "kat:scratch:load",
     SAVE: "kat:scratch:save",
+    VIDEO_UPLOAD_URL: "kat:scratch:video-upload-url",
+    VIDEO_UPLOAD_DENIED: "kat:scratch:video-upload-denied",
   };
 
   // The KAT origin permitted to talk to this editor. No parent, or a wildcard, means "do nothing".
@@ -107,7 +114,48 @@
       post({ type: SCRATCH_MSG.REQUEST_LOAD });
     }
   }
-  window.__katBridge = { save: requestSave, open: requestOpen };
+
+  // Save a stage recording (a .webm Blob the kat-recorder produced) to the pupil's KAT account. Ask the
+  // parent for a presigned upload URL (it enforces the size cap + rate limit), then PUT the bytes to R2 and
+  // report the stored key. Only one save is in flight at a time (the recorder saves a single clip at once).
+  var pendingVideo = null; // { blob, durationMs }
+  function saveVideo(blob, durationMs) {
+    if (!blob) return;
+    if (pendingVideo) { toast("A recording is already saving…", true); return; }
+    pendingVideo = { blob: blob, durationMs: typeof durationMs === "number" ? durationMs : null };
+    toast("Saving your recording…");
+    post({ type: SCRATCH_MSG.REQUEST_VIDEO_UPLOAD, sizeBytes: blob.size, durationMs: pendingVideo.durationMs });
+  }
+  // Tell the recorder (same window) how the save went, so its button can show Saved / retry. Decoupled
+  // from the parent contract: it is a local event, the KAT page is notified separately via VIDEO_SAVED.
+  function reportVideoResult(ok, message) {
+    try {
+      window.dispatchEvent(new CustomEvent("kat:video-save-result", { detail: { ok: ok, message: message || null } }));
+    } catch (e) { /* CustomEvent unsupported: the toast is still shown */ }
+  }
+  async function putVideo(uploadUrl, key) {
+    var job = pendingVideo;
+    if (!job) return;
+    try {
+      var put = await fetch(uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": "video/webm" },
+        body: job.blob,
+      });
+      if (!put.ok) throw new Error("R2 responded " + put.status);
+      post({ type: SCRATCH_MSG.VIDEO_SAVED, key: key, sizeBytes: job.blob.size, durationMs: job.durationMs });
+      toast("Recording saved to your account");
+      reportVideoResult(true);
+    } catch (err) {
+      post({ type: SCRATCH_MSG.VIDEO_SAVE_FAILED, message: String((err && err.message) || err) });
+      toast("Could not save the recording. Try again.", true);
+      reportVideoResult(false, "Could not save the recording.");
+    } finally {
+      pendingVideo = null;
+    }
+  }
+
+  window.__katBridge = { save: requestSave, open: requestOpen, saveVideo: saveVideo };
 
   window.addEventListener("message", function (event) {
     if (event.origin !== PARENT_ORIGIN) return; // only obey the KAT page that framed us
@@ -115,6 +163,12 @@
     if (!data || typeof data !== "object") return;
     if (data.type === SCRATCH_MSG.LOAD) void load(data.projectUrl || null);
     else if (data.type === SCRATCH_MSG.SAVE) void save(data.uploadUrl, data.key);
+    else if (data.type === SCRATCH_MSG.VIDEO_UPLOAD_URL) void putVideo(data.uploadUrl, data.key);
+    else if (data.type === SCRATCH_MSG.VIDEO_UPLOAD_DENIED) {
+      pendingVideo = null;
+      toast((data.message || "Could not save the recording.") + "", true);
+      reportVideoResult(false, data.message || null);
+    }
   });
 
   // Announce readiness (and re-announce once the VM exists, in case this ran before the GUI mounted).

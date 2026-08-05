@@ -60,7 +60,7 @@ const btn = (bg, extra) => Object.assign({
 class KatRecorder extends React.Component {
     constructor (props) {
         super(props);
-        this.state = {phase: 'idle', useMic: false, elapsed: 0, videoUrl: null, error: null};
+        this.state = {phase: 'idle', useMic: false, elapsed: 0, videoUrl: null, error: null, saveState: null, saveMsg: null};
         this.openSetup = this.openSetup.bind(this);
         this.cancel = this.cancel.bind(this);
         this.toggleMic = this.toggleMic.bind(this);
@@ -68,9 +68,17 @@ class KatRecorder extends React.Component {
         this.stop = this.stop.bind(this);
         this.finish = this.finish.bind(this);
         this.download = this.download.bind(this);
+        this.saveToAccount = this.saveToAccount.bind(this);
+        this.onSaveResult = this.onSaveResult.bind(this);
         this.reset = this.reset.bind(this);
     }
+    componentDidMount () {
+        // bridge.js dispatches this after it PUTs the recording to R2 (or is denied), so the button here can
+        // reflect the true result even though the upload itself is handled by the bridge -> KAT page.
+        window.addEventListener('kat:video-save-result', this.onSaveResult);
+    }
     componentWillUnmount () {
+        window.removeEventListener('kat:video-save-result', this.onSaveResult);
         this.teardown();
         if (this.state.videoUrl) URL.revokeObjectURL(this.state.videoUrl);
     }
@@ -186,7 +194,9 @@ class KatRecorder extends React.Component {
             return;
         }
         const blob = new Blob(chunks, {type});
-        this.setState({phase: 'done', videoUrl: URL.createObjectURL(blob)});
+        this._blob = blob;
+        this._durationMs = this._startTime ? Date.now() - this._startTime : null;
+        this.setState({phase: 'done', videoUrl: URL.createObjectURL(blob), saveState: null, saveMsg: null});
     }
     download () {
         if (!this.state.videoUrl) return;
@@ -197,13 +207,36 @@ class KatRecorder extends React.Component {
         a.click();
         a.remove();
     }
+    saveToAccount () {
+        // Only available when framed by KAT (bridge.js sets window.__katBridge.saveVideo). The bridge asks
+        // the KAT page for a rate-limited presigned URL, PUTs the .webm to R2, and reports the result back
+        // via the 'kat:video-save-result' event onSaveResult listens for.
+        const bridge = typeof window !== 'undefined' && window.__katBridge;
+        if (!bridge || !bridge.saveVideo || !this._blob) return;
+        this.setState({saveState: 'saving', saveMsg: null});
+        bridge.saveVideo(this._blob, this._durationMs);
+    }
+    onSaveResult (e) {
+        const ok = e && e.detail && e.detail.ok;
+        this.setState({saveState: ok ? 'saved' : 'error', saveMsg: (e && e.detail && e.detail.message) || null});
+    }
     reset () {
         if (this.state.videoUrl) URL.revokeObjectURL(this.state.videoUrl);
-        this.setState({phase: 'idle', videoUrl: null, elapsed: 0, error: null});
+        this._blob = null;
+        this._durationMs = null;
+        this.setState({phase: 'idle', videoUrl: null, elapsed: 0, error: null, saveState: null, saveMsg: null});
     }
     render () {
         if (typeof MediaRecorder === 'undefined') return null; // unsupported browser: hide entirely
-        const {phase, useMic, elapsed, videoUrl, error} = this.state;
+        const {phase, useMic, elapsed, videoUrl, error, saveState} = this.state;
+
+        // "Save to my account" only appears when framed by KAT (the bridge exposes saveVideo); the standalone
+        // editor just downloads. The label tracks the result the bridge reports back.
+        const canSave = typeof window !== 'undefined' && window.__katBridge && !!window.__katBridge.saveVideo;
+        const saveDisabled = saveState === 'saving' || saveState === 'saved';
+        const saveLabel = saveState === 'saving' ? 'Saving…' :
+            saveState === 'saved' ? 'Saved' :
+                saveState === 'error' ? 'Save failed, retry' : 'Save to my account';
 
         const iconBtn = extra => Object.assign({
             width: '34px', height: '34px', borderRadius: '50%', border: `1px solid ${LINE}`,
@@ -253,9 +286,17 @@ class KatRecorder extends React.Component {
                         <div style={Object.assign({width: 'min(520px, 92vw)'}, card)}>
                             <div style={{fontWeight: 700, fontSize: '15px', marginBottom: '10px'}}>{'Your recording'}</div>
                             <video src={videoUrl} controls style={{width: '100%', borderRadius: '10px', background: '#000', maxHeight: '60vh'}} />
-                            <div style={{display: 'flex', gap: '8px', marginTop: '12px'}}>
-                                <button type="button" style={btn(PINE)} onClick={this.download}>{'Download video'}</button>
-                                <button type="button" style={btn(CLAY)} onClick={this.reset}>{'Record again'}</button>
+                            <div style={{display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap'}}>
+                                {canSave ? (
+                                    <button
+                                        type="button"
+                                        disabled={saveDisabled}
+                                        style={btn(saveState === 'saved' ? PINE : CLAY, saveDisabled ? {opacity: 0.6, cursor: 'default'} : null)}
+                                        onClick={this.saveToAccount}
+                                    >{saveLabel}</button>
+                                ) : null}
+                                <button type="button" style={btn(canSave ? '#efe9e0' : PINE, canSave ? {color: INK} : null)} onClick={this.download}>{'Download video'}</button>
+                                <button type="button" style={btn('#efe9e0', {color: INK})} onClick={this.reset}>{'Record again'}</button>
                                 <button type="button" style={btn('#efe9e0', {color: INK, marginLeft: 'auto'})} onClick={this.reset}>{'Close'}</button>
                             </div>
                         </div>
