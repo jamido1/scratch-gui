@@ -7,6 +7,7 @@ import GreenFlag from '../green-flag/green-flag.jsx';
 import StopAll from '../stop-all/stop-all.jsx';
 import TurboMode from '../turbo-mode/turbo-mode.jsx';
 import KatRecorder from '../../playground/kat-recorder.jsx';
+import KatSnapshot from '../../playground/kat-snapshot.jsx';
 
 import styles from './controls.css';
 
@@ -52,6 +53,7 @@ const Controls = function (props) {
                 <TurboMode />
             ) : null}
             <KatRecorder />
+            <KatSnapshot />
         </div>
     );
 };
